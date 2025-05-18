@@ -7,6 +7,7 @@
  * 2. Separate namespaces for AcmeCRM and integration service data
  * 3. Basic CRUD operations for both data types
  * 4. TTL support for cached items
+ * 5. Contact storage for both AcmeCRM and internal formats
  */
 
 const Redis = require('ioredis');
@@ -81,13 +82,6 @@ class RedisService {
    * @param {string|Object} value - Value to store (objects will be JSON stringified)
    * @param {number} [ttl] - Time-to-live in seconds (optional)
    * @returns {Promise<string>} "OK" if successful
-   * 
-   * Example:
-   * Input: 
-   *   key: "acme:contact:123"
-   *   value: { id: "123", acme_first_name: "John", acme_last_name: "Doe" }
-   *   ttl: 3600
-   * Output: "OK"
    */
   static async set(key, value, ttl) {
     const client = this.getClient();
@@ -110,12 +104,6 @@ class RedisService {
    * @param {string} key - Redis key
    * @param {boolean} [parse=true] - Whether to parse JSON (default: true)
    * @returns {Promise<Object|string|null>} Retrieved value or null if not found
-   * 
-   * Example:
-   * Input: 
-   *   key: "acme:contact:123"
-   *   parse: true
-   * Output: { id: "123", acme_first_name: "John", acme_last_name: "Doe" }
    */
   static async get(key, parse = true) {
     const client = this.getClient();
@@ -147,10 +135,6 @@ class RedisService {
    * Delete a value from Redis
    * @param {string} key - Redis key
    * @returns {Promise<number>} 1 if key was removed, 0 if key did not exist
-   * 
-   * Example:
-   * Input: key: "acme:contact:123"
-   * Output: 1
    */
   static async del(key) {
     const client = this.getClient();
@@ -167,10 +151,6 @@ class RedisService {
    * Check if a key exists in Redis
    * @param {string} key - Redis key
    * @returns {Promise<boolean>} True if key exists, false otherwise
-   * 
-   * Example:
-   * Input: key: "acme:contact:123"
-   * Output: true
    */
   static async exists(key) {
     const client = this.getClient();
@@ -190,25 +170,12 @@ class RedisService {
    * @param {Object} hash - Hash to store
    * @param {number} [ttl] - Time-to-live in seconds (optional)
    * @returns {Promise<boolean>} True if successful
-   * 
-   * Example:
-   * Input: 
-   *   key: "acme:contact:123"
-   *   hash: { acme_first_name: "John", acme_last_name: "Doe" }
-   *   ttl: 3600
-   * Output: true
    */
   static async hmset(key, hash, ttl) {
     const client = this.getClient();
     
     try {
-      // Convert any nested objects to JSON strings
-      const processedHash = {};
-      for (const [field, value] of Object.entries(hash)) {
-        processedHash[field] = typeof value === 'object' ? JSON.stringify(value) : value;
-      }
-      
-      await client.hmset(key, processedHash);
+      await client.hmset(key, hash);
       
       if (ttl) {
         await client.expire(key, ttl);
@@ -224,16 +191,9 @@ class RedisService {
   /**
    * Get a hash from Redis
    * @param {string} key - Redis key
-   * @param {boolean} [parseValues=true] - Whether to parse JSON values (default: true)
-   * @returns {Promise<Object|null>} Retrieved hash or null if not found
-   * 
-   * Example:
-   * Input: 
-   *   key: "acme:contact:123"
-   *   parseValues: true
-   * Output: { acme_first_name: "John", acme_last_name: "Doe" }
+   * @returns {Promise<Object|null>} Hash as an object or null if not found
    */
-  static async hgetall(key, parseValues = true) {
+  static async hgetall(key) {
     const client = this.getClient();
     
     try {
@@ -241,17 +201,6 @@ class RedisService {
       
       if (!hash || Object.keys(hash).length === 0) {
         return null;
-      }
-      
-      if (parseValues) {
-        // Try to parse any JSON string values
-        for (const [field, value] of Object.entries(hash)) {
-          try {
-            hash[field] = JSON.parse(value);
-          } catch (e) {
-            // If not valid JSON, keep as is
-          }
-        }
       }
       
       return hash;
@@ -262,171 +211,146 @@ class RedisService {
   }
   
   /**
-   * Store an AcmeCRM contact
-   * @param {string} id - Contact ID
-   * @param {Object} contact - Contact data in AcmeCRM format
-   * @returns {Promise<boolean>} True if successful
-   * 
-   * Example:
-   * Input: 
-   *   id: "123"
-   *   contact: { 
-   *     acme_first_name: "John", 
-   *     acme_last_name: "Doe",
-   *     acme_email: "john.doe@example.com" 
-   *   }
-   * Output: true
+   * Set a value in Redis with a TTL
+   * @param {string} key - Redis key
+   * @param {string|Object} value - Value to store
+   * @param {number} ttl - Time-to-live in seconds
+   * @returns {Promise<string>} "OK" if successful
    */
-  static async storeAcmeContact(id, contact) {
-    const key = this.generateKey('acmeContact', id);
-    return await this.hmset(key, contact);
+  static async setex(key, value, ttl) {
+    return this.set(key, value, ttl);
   }
   
   /**
-   * Retrieve an AcmeCRM contact
-   * @param {string} id - Contact ID
-   * @returns {Promise<Object|null>} Contact data or null if not found
-   * 
-   * Example:
-   * Input: id: "123"
-   * Output: { 
-   *   acme_first_name: "John", 
-   *   acme_last_name: "Doe",
-   *   acme_email: "john.doe@example.com" 
-   * }
+   * Set a value in Redis only if the key does not exist
+   * @param {string} key - Redis key
+   * @param {string|Object} value - Value to store
+   * @param {number} [ttl] - Time-to-live in seconds (optional)
+   * @returns {Promise<boolean>} True if set, false if key already exists
+   */
+  static async setnx(key, value, ttl) {
+    const client = this.getClient();
+    const stringValue = typeof value === 'object' ? JSON.stringify(value) : value;
+    
+    try {
+      const result = await client.setnx(key, stringValue);
+      
+      if (result === 1 && ttl) {
+        await client.expire(key, ttl);
+      }
+      
+      return result === 1;
+    } catch (error) {
+      logger.error(`Error setting Redis key ${key} if not exists`, error);
+      throw new AppError('Failed to set value in Redis if not exists', errorTypes.INTERNAL_ERROR);
+    }
+  }
+  
+  /**
+   * Get the TTL of a key in Redis
+   * @param {string} key - Redis key
+   * @returns {Promise<number>} TTL in seconds, -1 if no TTL, -2 if key does not exist
+   */
+  static async ttl(key) {
+    const client = this.getClient();
+    
+    try {
+      return await client.ttl(key);
+    } catch (error) {
+      logger.error(`Error getting TTL for Redis key ${key}`, error);
+      throw new AppError('Failed to get TTL from Redis', errorTypes.INTERNAL_ERROR);
+    }
+  }
+  
+  /**
+   * Increment a value in Redis
+   * @param {string} key - Redis key
+   * @returns {Promise<number>} New value after increment
+   */
+  static async incr(key) {
+    const client = this.getClient();
+    
+    try {
+      return await client.incr(key);
+    } catch (error) {
+      logger.error(`Error incrementing Redis key ${key}`, error);
+      throw new AppError('Failed to increment value in Redis', errorTypes.INTERNAL_ERROR);
+    }
+  }
+  
+  /**
+   * Store an AcmeCRM contact in Redis
+   * @param {string} id - AcmeCRM contact ID
+   * @param {Object} contact - AcmeCRM contact data
+   * @param {number} [ttl] - Time-to-live in seconds (optional)
+   * @returns {Promise<string>} "OK" if successful
+   */
+  static async storeAcmeContact(id, contact, ttl) {
+    const key = this.generateKey('acmeContact', id);
+    return this.set(key, contact, ttl);
+  }
+  
+  /**
+   * Retrieve an AcmeCRM contact from Redis
+   * @param {string} id - AcmeCRM contact ID
+   * @returns {Promise<Object|null>} AcmeCRM contact data or null if not found
    */
   static async getAcmeContact(id) {
     const key = this.generateKey('acmeContact', id);
-    return await this.hgetall(key);
+    return this.get(key);
   }
   
   /**
-   * Delete an AcmeCRM contact
-   * @param {string} id - Contact ID
-   * @returns {Promise<boolean>} True if successful, false if contact did not exist
-   * 
-   * Example:
-   * Input: id: "123"
-   * Output: true
+   * Delete an AcmeCRM contact from Redis
+   * @param {string} id - AcmeCRM contact ID
+   * @returns {Promise<number>} 1 if contact was removed, 0 if contact did not exist
    */
   static async deleteAcmeContact(id) {
     const key = this.generateKey('acmeContact', id);
-    const result = await this.del(key);
-    return result === 1;
+    return this.del(key);
   }
   
   /**
-   * Store an integration contact
-   * @param {string} id - Contact ID
-   * @param {Object} contact - Contact data in internal format
-   * @returns {Promise<boolean>} True if successful
-   * 
-   * Example:
-   * Input: 
-   *   id: "123"
-   *   contact: { 
-   *     firstName: "John", 
-   *     lastName: "Doe",
-   *     email: "john.doe@example.com" 
-   *   }
-   * Output: true
+   * Store an internal contact in Redis
+   * @param {string} id - Internal contact ID
+   * @param {Object} contact - Internal contact data
+   * @param {number} [ttl] - Time-to-live in seconds (optional)
+   * @returns {Promise<string>} "OK" if successful
    */
-  static async storeIntegrationContact(id, contact) {
+  static async storeIntegrationContact(id, contact, ttl) {
     const key = this.generateKey('integrationContact', id);
-    return await this.hmset(key, contact);
+    return this.set(key, contact, ttl);
   }
   
   /**
-   * Retrieve an integration contact
-   * @param {string} id - Contact ID
-   * @returns {Promise<Object|null>} Contact data or null if not found
-   * 
-   * Example:
-   * Input: id: "123"
-   * Output: { 
-   *   firstName: "John", 
-   *   lastName: "Doe",
-   *   email: "john.doe@example.com" 
-   * }
+   * Retrieve an internal contact from Redis
+   * @param {string} id - Internal contact ID
+   * @returns {Promise<Object|null>} Internal contact data or null if not found
    */
   static async getIntegrationContact(id) {
     const key = this.generateKey('integrationContact', id);
-    return await this.hgetall(key);
+    return this.get(key);
   }
   
   /**
-   * Delete an integration contact
-   * @param {string} id - Contact ID
-   * @returns {Promise<boolean>} True if successful, false if contact did not exist
-   * 
-   * Example:
-   * Input: id: "123"
-   * Output: true
+   * Delete an internal contact from Redis
+   * @param {string} id - Internal contact ID
+   * @returns {Promise<number>} 1 if contact was removed, 0 if contact did not exist
    */
   static async deleteIntegrationContact(id) {
     const key = this.generateKey('integrationContact', id);
-    const result = await this.del(key);
-    return result === 1;
+    return this.del(key);
   }
   
   /**
-   * Store a cached item with TTL
-   * @param {string} key - Cache key
-   * @param {Object} value - Value to cache
-   * @param {number} [ttl] - Time-to-live in seconds (defaults to config value)
-   * @returns {Promise<boolean>} True if successful
-   * 
-   * Example:
-   * Input: 
-   *   key: "user:123:contacts"
-   *   value: [{ id: "1", name: "Contact 1" }, { id: "2", name: "Contact 2" }]
-   *   ttl: 300
-   * Output: true
-   */
-  static async cache(key, value, ttl = redisConfig.ttl.cache) {
-    const cacheKey = this.generateKey('integrationCache', key);
-    await this.set(cacheKey, value, ttl);
-    return true;
-  }
-  
-  /**
-   * Retrieve a cached item
-   * @param {string} key - Cache key
-   * @returns {Promise<Object|null>} Cached value or null if not found/expired
-   * 
-   * Example:
-   * Input: key: "user:123:contacts"
-   * Output: [{ id: "1", name: "Contact 1" }, { id: "2", name: "Contact 2" }]
-   */
-  static async getCached(key) {
-    const cacheKey = this.generateKey('integrationCache', key);
-    return await this.get(cacheKey);
-  }
-  
-  /**
-   * Invalidate a cached item
-   * @param {string} key - Cache key
-   * @returns {Promise<boolean>} True if successful
-   * 
-   * Example:
-   * Input: key: "user:123:contacts"
-   * Output: true
-   */
-  static async invalidateCache(key) {
-    const cacheKey = this.generateKey('integrationCache', key);
-    await this.del(cacheKey);
-    return true;
-  }
-  
-  /**
-   * Close Redis connection
-   * Should be called when shutting down the application
+   * Close the Redis connection
+   * @returns {Promise<void>}
    */
   static async close() {
     if (redisClient) {
-      logger.info('Closing Redis connection');
       await redisClient.quit();
       redisClient = null;
+      logger.info('Redis connection closed');
     }
   }
 }
