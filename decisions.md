@@ -1,6 +1,6 @@
 # Technical Decisions
 
-This document outlines the key technical decisions made for the Lynq Integrations Engineer Take-Home Assessment.
+This document outlines the key technical decisions made for the Linq Integrations Engineer Take-Home Assessment.
 
 ## Technology Stack
 

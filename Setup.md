@@ -169,7 +169,102 @@ Expected response:
 
 ## Authentication
 
-Details about the authentication flow will be documented here.
+### JWT Authentication Flow
+
+The application uses JWT (JSON Web Tokens) for authentication. Here's how it works:
+
+1. **Login**:
+   ```
+   POST /mock-acme/auth/login
+   Content-Type: application/json
+   
+   {
+     "username": "user@example.com",
+     "password": "password123"
+   }
+   ```
+
+   Response:
+   ```json
+   {
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     "expiresIn": 3600,
+     "user": {
+       "id": "123",
+       "username": "user@example.com"
+     }
+   }
+   ```
+
+   Curl command:
+   ```bash
+   curl -X POST http://localhost:3000/mock-acme/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin@acmecrm.com", "password": "admin123"}'
+   ```
+
+2. **Using the Token**:
+   ```
+   GET /protected-endpoint
+   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ```
+
+   Curl command:
+   ```bash
+   curl -X GET http://localhost:3000/protected-endpoint \
+     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   ```
+
+3. **Refreshing the Token**:
+   ```
+   POST /mock-acme/auth/refresh
+   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ```
+
+   Response:
+   ```json
+   {
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     "expiresIn": 3600
+   }
+   ```
+
+   Curl command:
+   ```bash
+   curl -X POST http://localhost:3000/mock-acme/auth/refresh \
+     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   ```
+
+4. **Logout**:
+   ```
+   POST /mock-acme/auth/logout
+   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ```
+
+   Curl command:
+   ```bash
+   curl -X POST http://localhost:3000/mock-acme/auth/logout \
+     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   ```
+
+### Token Storage
+
+Tokens are stored in Redis with the following structure:
+
+- **Key Pattern**: `acme:auth:token:<token_id>`
+- **Data Structure**: Redis Hash
+- **Fields**:
+  - `userId`: ID of the user the token belongs to
+  - `issuedAt`: Timestamp when the token was issued
+  - `expiresAt`: Timestamp when the token expires
+  - `revoked`: Whether the token has been revoked
+
+### Token Validation
+
+Tokens are validated on each request by:
+1. Checking the token signature
+2. Verifying the token hasn't expired
+3. Ensuring the token hasn't been revoked
 
 ## Error Handling
 

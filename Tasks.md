@@ -48,14 +48,40 @@ This document tracks the implementation of each task, the technical decisions ma
   - Integration with Redis for storing processed data
 
 ### Task 1.4: JWT Authentication Implementation
-- **Status**: Not started
+- **Status**: Completed
 - **Technical Decisions**: 
+  - Using JWT for stateless authentication with configurable expiration
+  - Implementing token refresh with sliding expiration strategy
+  - Storing token metadata in Redis for validation and revocation
+  - Using middleware pattern for protecting routes
+  - Implementing proper error handling for authentication failures
+  - Added role-based access control for authorization
 - **Integration Points**:
+  - Authentication service for token management
+  - Redis for token storage and validation
+  - Express middleware for protecting routes
+  - User model for credential validation
+- **Implementation Details**:
+  - Created auth.service.js for token generation, verification, refresh, and revocation
+  - Implemented auth.middleware.js for route protection and role-based access
+  - Added auth.controller.js with login, refresh, and logout endpoints
+  - Set up auth.routes.js to define authentication API routes
+  - Created auth.test.js to verify authentication functionality
+  - Authentication routes for login, refresh, and logout
 
 ### Task 1.5: Error Handling and Rate Limiting
-- **Status**: Not started
+- **Status**: In progress
 - **Technical Decisions**: 
+  - Implementing centralized error handling middleware for consistent error responses
+  - Using Redis for rate limiting with token bucket algorithm
+  - Adding exponential backoff strategy for retries
+  - Implementing request timeout handling
+  - Enhancing logging for errors and rate limit events
 - **Integration Points**:
+  - Error middleware integrated with Express error handling
+  - Rate limiter middleware applied to routes based on configuration
+  - Redis used for storing rate limit counters
+  - Logger enhanced for structured error reporting
 
 ## Story 2: CRUD Operations and Field Mapping
 
