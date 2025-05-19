@@ -97,14 +97,14 @@ With more time, the following improvements could be made:
 > **Note**: For detailed information about APIs, database tables, Kafka topics, unit tests, and integration tests, please visit the documentation files in the docs folder. This document explains the high-level flow of the application, along with the decisions made along the way.
 >
 > **Documentation Files**:
-> - [**Tasks.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/main/docs/Tasks.md): Tracks the progress of tasks in the application and their completion status
-> - [**Setup.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/main/docs/Setup.md): Contains installation, configuration, and deployment instructions
-> - [**API-Documentation.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/main/docs/API-Documentation.md): Details all API endpoints, request/response formats, and examples
-> - [**Database-Schema.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/main/docs/Database-Schema.md): Describes the PostgreSQL database schema and relationships
-> - [**Kafka-Topics.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/main/docs/Kafka-Topics.md): Explains Kafka topics, message formats, and consumer/producer configuration
-> - [**Authentication.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/main/docs/Authentication.md): Details the JWT authentication implementation and security considerations
-> - [**Webhook-Integration.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/main/docs/Webhook-Integration.md): Provides information about webhook processing and integration with AcmeCRM
-> - [**Error-Handling.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/main/docs/Error-Handling.md): Describes the error handling approach and error codes
+> - [**Tasks.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/master/docs/Tasks.md): Tracks the progress of tasks in the application and their completion status
+> - [**Setup.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/master/docs/Setup.md): Contains installation, configuration, and deployment instructions
+> - [**API-Documentation.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/master/docs/API-Documentation.md): Details all API endpoints, request/response formats, and examples
+> - [**Database-Schema.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/master/docs/Database-Schema.md): Describes the PostgreSQL database schema and relationships
+> - [**Kafka-Topics.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/master/docs/Kafka-Topics.md): Explains Kafka topics, message formats, and consumer/producer configuration
+> - [**Authentication.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/master/docs/Authentication.md): Details the JWT authentication implementation and security considerations
+> - [**Webhook-Integration.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/master/docs/Webhook-Integration.md): Provides information about webhook processing and integration with AcmeCRM
+> - [**Error-Handling.md**](https://github.com/Siddartha-Kodaboina/acme-crm-integration/blob/master/docs/Error-Handling.md): Describes the error handling approach and error codes
 
 ## Features
 
