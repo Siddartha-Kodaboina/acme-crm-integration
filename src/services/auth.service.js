@@ -58,8 +58,7 @@ class AuthService {
       const token = jwt.sign(payload, config.jwt.secret);
       
       // Store token metadata in Redis
-      const tokenKey = RedisService.generateKey('acmeAuth', tokenId);
-      await RedisService.hmset(tokenKey, {
+      await RedisService.storeToken(tokenId, {
         userId: user.id,
         issuedAt: issuedAt.toString(),
         expiresAt: expiresAt.toString(),
@@ -105,8 +104,7 @@ class AuthService {
       const decoded = jwt.verify(token, config.jwt.secret);
       
       // Check if token has been revoked
-      const tokenKey = RedisService.generateKey('acmeAuth', decoded.jti);
-      const tokenData = await RedisService.hgetall(tokenKey);
+      const tokenData = await RedisService.getToken(decoded.jti);
       
       if (!tokenData) {
         throw new AppError('Token not found or expired', errorTypes.UNAUTHORIZED);
@@ -186,18 +184,14 @@ class AuthService {
    */
   static async revokeToken(tokenId) {
     try {
-      const tokenKey = RedisService.generateKey('acmeAuth', tokenId);
-      const tokenData = await RedisService.hgetall(tokenKey);
+      const tokenData = await RedisService.getToken(tokenId);
       
       if (!tokenData) {
         return false; // Token not found or already expired
       }
       
       // Mark token as revoked
-      await RedisService.hmset(tokenKey, {
-        ...tokenData,
-        revoked: 'true'
-      });
+      await RedisService.revokeToken(tokenId, tokenData);
       
       logger.info(`Revoked token ${tokenId}`);
       return true;

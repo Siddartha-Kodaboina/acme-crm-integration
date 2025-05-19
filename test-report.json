@@ -1,0 +1,49 @@
+{
+  "timestamp": "2025-05-18T23:39:01.951Z",
+  "duration": 7481,
+  "summary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "successRate": "100.00%"
+  },
+  "results": [
+    {
+      "file": "contact-model-postgres.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 193
+    },
+    {
+      "file": "redis-refactor.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 227
+    },
+    {
+      "file": "auth-with-redis.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 165
+    },
+    {
+      "file": "system-integration.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 241
+    },
+    {
+      "file": "performance/contact-performance.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 489
+    },
+    {
+      "file": "error-handling.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 158
+    }
+  ]
+}

@@ -7,6 +7,7 @@
  * 2. Handles mapping between AcmeCRM and internal formats
  * 3. Provides factory methods for creating contacts
  * 4. Manages schema versioning and migration
+ * 5. Uses storage adapters for database operations (Redis, PostgreSQL)
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -14,14 +15,24 @@ const { AppError, errorTypes, errorCodes } = require('../utils/error-handler');
 const acmeContactSchema = require('./schemas/acme-contact.schema');
 const internalContactSchema = require('./schemas/internal-contact.schema');
 const contactMapperService = require('../services/contact-mapper.service');
-const RedisService = require('../services/redis.service');
+const StorageFactory = require('../services/storage/storage-factory');
 const logger = require('../utils/logger');
 
 /**
  * Contact Model class
  * Provides methods for working with contact data
+ * Uses storage adapters for database operations
  */
 class ContactModel {
+  /**
+   * Get the storage adapter
+   * @returns {Object} Storage adapter instance
+   * 
+   * @private
+   */
+  static _getStorageAdapter() {
+    return StorageFactory.getAdapter();
+  }
   /**
    * Create a new contact from AcmeCRM data
    * @param {Object} acmeContactData - Contact data in AcmeCRM format
@@ -64,11 +75,12 @@ class ContactModel {
       // Map to internal format
       const internalContact = contactMapperService.mapAcmeToInternal(acmeContact);
       
-      // Store in Redis
+      // Store in database using adapter
       await this.saveContact(internalContact);
       
       // Also store the original AcmeCRM data
-      await RedisService.storeAcmeContact(acmeContact.id, acmeContact);
+      const storageAdapter = this._getStorageAdapter();
+      await storageAdapter.storeAcmeContact(acmeContact.id, acmeContact);
       
       logger.info(`Created contact from AcmeCRM data: ${internalContact.id} (source ID: ${internalContact.sourceId})`);
       
@@ -130,13 +142,14 @@ class ContactModel {
         });
       }
       
-      // Store in Redis
+      // Store in database using adapter
       await this.saveContact(internalContact);
       
       // If the source is AcmeCRM, also store in AcmeCRM format
       if (internalContact.source === 'acmecrm') {
         const acmeContact = contactMapperService.mapInternalToAcme(internalContact);
-        await RedisService.storeAcmeContact(acmeContact.id, acmeContact);
+        const storageAdapter = this._getStorageAdapter();
+        await storageAdapter.storeAcmeContact(acmeContact.id, acmeContact);
       }
       
       logger.info(`Created contact: ${internalContact.id}`);
@@ -170,8 +183,9 @@ class ContactModel {
    */
   static async getContactById(id) {
     try {
-      // Get from Redis
-      const contact = await RedisService.getIntegrationContact(id);
+      // Get from database using adapter
+      const storageAdapter = this._getStorageAdapter();
+      const contact = await storageAdapter.getInternalContact(id);
       
       if (!contact) {
         return null;
@@ -213,23 +227,26 @@ class ContactModel {
    */
   static async getContactBySourceId(source, sourceId) {
     try {
-      // For AcmeCRM, we can directly get the contact data
-      if (source === 'acmecrm') {
-        const acmeContact = await RedisService.getAcmeContact(sourceId);
-        
-        if (!acmeContact) {
-          return null;
-        }
-        
-        // Map to internal format
-        return contactMapperService.mapAcmeToInternal(acmeContact);
+      // Use the storage adapter to get the contact by source and source ID
+      const storageAdapter = this._getStorageAdapter();
+      const contact = await storageAdapter.getInternalContactBySourceId(source, sourceId);
+      
+      // If we found a contact, return it
+      if (contact) {
+        return contact;
       }
       
-      // For other sources, we need to search by source and sourceId
-      // This is a simplified implementation - in a real application, you would use a database query
-      // or a Redis index to find contacts by source and sourceId
+      // For AcmeCRM, we can also try to get the contact data directly and map it
+      if (source === 'acmecrm') {
+        const acmeContact = await storageAdapter.getAcmeContact(sourceId);
+        
+        if (acmeContact) {
+          // Map to internal format
+          return contactMapperService.mapAcmeToInternal(acmeContact);
+        }
+      }
       
-      // For now, we'll just return null for non-AcmeCRM sources
+      // Contact not found
       return null;
     } catch (error) {
       throw new AppError(`Failed to get contact with source ${source} and ID ${sourceId}`, errorTypes.INTERNAL_ERROR, {
@@ -250,7 +267,8 @@ class ContactModel {
    * "c8b5f7d9-8e7a-4a1d-9b5c-1d2e3f4a5b6c",
    * {
    *   "firstName": "John",
-   *   "lastName": "Smith"
+   *   "lastName": "Smith",
+   *   "version": 1
    * }
    * 
    * Output:
@@ -259,6 +277,7 @@ class ContactModel {
    *   "firstName": "John",
    *   "lastName": "Smith",
    *   "email": "john.doe@example.com",
+   *   "version": 2,
    *   ...
    * }
    */
@@ -273,12 +292,24 @@ class ContactModel {
         });
       }
       
+      // Check version for optimistic concurrency control
+      if (updateData.version !== undefined && existingContact.version !== updateData.version) {
+        throw new AppError('Contact has been modified by another user', errorTypes.CONFLICT, {
+          code: errorCodes.VERSION_CONFLICT,
+          details: {
+            currentVersion: existingContact.version,
+            submittedVersion: updateData.version
+          }
+        });
+      }
+      
       // Merge existing data with update data
       const updatedContact = {
         ...existingContact,
         ...updateData,
         id, // Ensure ID doesn't change
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        version: (existingContact.version || 0) + 1 // Increment version
       };
       
       // Validate the updated contact
@@ -291,13 +322,14 @@ class ContactModel {
         });
       }
       
-      // Save to Redis
+      // Save to database using adapter
       await this.saveContact(updatedContact);
       
       // If the source is AcmeCRM, also update in AcmeCRM format
       if (updatedContact.source === 'acmecrm') {
         const acmeContact = contactMapperService.mapInternalToAcme(updatedContact);
-        await RedisService.storeAcmeContact(acmeContact.id, acmeContact);
+        const storageAdapter = this._getStorageAdapter();
+        await storageAdapter.storeAcmeContact(acmeContact.id, acmeContact);
       }
       
       logger.info(`Updated contact: ${id}`);
@@ -332,12 +364,13 @@ class ContactModel {
         return false;
       }
       
-      // Delete from Redis
-      await RedisService.deleteIntegrationContact(id);
+      // Delete from database using adapter
+      const storageAdapter = this._getStorageAdapter();
+      await storageAdapter.deleteInternalContact(id);
       
       // If the source is AcmeCRM, also delete the AcmeCRM data
       if (existingContact.source === 'acmecrm') {
-        await RedisService.deleteAcmeContact(existingContact.sourceId);
+        await storageAdapter.deleteAcmeContact(existingContact.sourceId);
       }
       
       logger.info(`Deleted contact: ${id}`);
@@ -352,7 +385,7 @@ class ContactModel {
   }
   
   /**
-   * Save a contact to Redis
+   * Save a contact to the database
    * @param {Object} contact - Contact in internal format
    * @returns {Promise<void>}
    * 
@@ -366,7 +399,8 @@ class ContactModel {
    */
   static async saveContact(contact) {
     try {
-      await RedisService.storeIntegrationContact(contact.id, contact);
+      const storageAdapter = this._getStorageAdapter();
+      await storageAdapter.storeInternalContact(contact.id, contact);
     } catch (error) {
       throw new AppError(`Failed to save contact with ID ${contact.id}`, errorTypes.INTERNAL_ERROR, {
         code: errorCodes.DATABASE_ERROR,

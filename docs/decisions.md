@@ -52,6 +52,47 @@ This document outlines the key technical decisions made for the Linq Integration
 - **Tradeoff**: A local Redis instance is simpler but doesn't scale as well as a distributed cache.
 - **Justification**: For the scope of this assessment, a local Redis instance is sufficient. In a production environment with multiple service instances, we would configure Redis for distributed caching.
 
+## Database Migration: Redis to PostgreSQL
+
+We've decided to migrate from Redis to PostgreSQL for contact storage while keeping Redis for JWT token management and rate limiting. This decision was made for the following reasons:
+
+1. **Data Persistence**: PostgreSQL provides better data persistence and durability compared to Redis
+2. **Complex Queries**: PostgreSQL supports complex SQL queries, which are beneficial for filtering and pagination
+3. **Relational Data**: PostgreSQL's relational model is better suited for structured contact data
+4. **Transaction Support**: PostgreSQL provides ACID transactions for data consistency
+5. **Scalability**: PostgreSQL can handle larger datasets with proper indexing and optimization
+
+## Contact Updates and Deletion (Task 2.4)
+
+For contact updates and deletion, we've made the following decisions:
+
+1. **HTTP Methods**: 
+   - PUT for full updates (replacing the entire resource)
+   - PATCH for partial updates (updating specific fields)
+   - DELETE for removing contacts
+
+2. **Optimistic Concurrency Control**: 
+   - Using version numbers to prevent conflicts when multiple users update the same contact
+   - Returning 409 Conflict when version mismatch occurs
+
+3. **Soft Deletion**: 
+   - Implementing soft deletion by marking records as deleted rather than physically removing them
+   - This maintains data history and allows for potential recovery
+   - Deleted contacts are excluded from normal queries but can be included with a special parameter
+
+4. **Transaction Support**: 
+   - Using PostgreSQL transactions to ensure atomic operations
+   - This ensures data consistency during complex operations
+
+5. **Validation Strategy**: 
+   - Different validation schemas for PUT vs PATCH operations
+   - PUT requires all mandatory fields
+   - PATCH allows partial updates with validation on provided fields only
+
+6. **Webhook Events**: 
+   - Creating specific event types for updates (`contact.updated`) and deletions (`contact.deleted`)
+   - Including before/after data in update events for change tracking
+
 ## Future Improvements
 
 With more time, the following improvements could be made:

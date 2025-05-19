@@ -16,6 +16,9 @@ const { dynamicTimeout } = require('./middleware/timeout.middleware');
 // Import routes
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
+const contactRoutes = require('./routes/contact.routes');
+const webhookRoutes = require('./routes/webhook.routes');
+const simulatorRoutes = require('./routes/simulator.routes');
 
 // Initialize Express app
 const app = express();
@@ -43,6 +46,12 @@ app.use('/mock-acme/auth', authRoutes);
 
 // Apply API rate limiting to all API routes
 app.use('/api', apiRateLimiter(config.rateLimit.api));
+
+// Register API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/contacts', contactRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/simulator', simulatorRoutes);
 
 // Apply error handling middleware
 app.use(methodNotAllowedHandler);

@@ -78,18 +78,12 @@ function rateLimiter(options) {
 
       // Generate rate limit key
       const key = keyGenerator(req);
-      const rateLimitKey = RedisService.generateKey('rateLimit', key);
-      const violationsKey = RedisService.generateKey('rateLimitViolations', key);
-
+      
       // Get current count and violations
-      const [count, violations] = await Promise.all([
-        RedisService.get(rateLimitKey),
-        RedisService.get(violationsKey)
+      const [currentCount, violationCount] = await Promise.all([
+        RedisService.getRateLimitCount(key),
+        RedisService.getRateLimitViolationCount(key)
       ]);
-
-      // Parse values
-      const currentCount = parseInt(count) || 0;
-      const violationCount = parseInt(violations) || 0;
 
       // Check if rate limit exceeded
       if (currentCount >= limit) {
@@ -100,8 +94,8 @@ function rateLimiter(options) {
           maxBackoffSec
         );
 
-        // Increment violations counter
-        await RedisService.set(violationsKey, violationCount + 1, 24 * 60 * 60); // 24 hours TTL
+        // Track violation
+        await RedisService.trackRateLimitViolation(key, 24 * 60 * 60); // 24 hours TTL
 
         // Calculate reset time
         const resetTime = new Date(Date.now() + windowSec * 1000).toISOString();
@@ -133,15 +127,11 @@ function rateLimiter(options) {
         });
       }
 
-      // Increment counter
-      await RedisService.incr(rateLimitKey);
-
-      // Set expiration if this is the first request in the window
-      if (currentCount === 0) {
-        await RedisService.expire(rateLimitKey, windowSec);
-      }
+      // Track request
+      await RedisService.trackRateLimit(key, windowSec);
 
       // Get the new TTL
+      const rateLimitKey = RedisService.generateKey('rateLimit', key);
       const ttl = await RedisService.ttl(rateLimitKey);
 
       // Add rate limit headers

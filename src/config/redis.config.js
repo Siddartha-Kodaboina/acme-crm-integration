@@ -1,6 +1,9 @@
 /**
- * Redis configuration
+ * Redis Configuration
  * Provides configuration for Redis connections
+ * 
+ * This configuration is optimized for JWT token management and rate limiting.
+ * Contact storage has been moved to PostgreSQL.
  */
 
 const config = require('./app.config');
@@ -30,24 +33,41 @@ const redisConfig = {
   
   // Key prefixes for different data types
   keyPrefixes: {
-    // AcmeCRM data
-    acmeContact: 'acme:contact:',
-    acmeAuth: 'acme:auth:',
+    // Authentication data
+    acmeAuth: 'auth:token:',
     
-    // Integration service data
-    integrationContact: 'integration:contact:',
-    integrationCache: 'integration:cache:',
+    // Rate limiting data
+    rateLimit: 'rate:limit:',
+    rateLimitViolations: 'rate:violations:',
     
     // System data
-    rateLimit: 'system:rate-limit:',
-    metrics: 'system:metrics:'
+    metrics: 'system:metrics:',
+    cache: 'system:cache:',
+    
+    // Legacy prefixes (deprecated)
+    acmeContact: 'legacy:acme:contact:',
+    integrationContact: 'legacy:integration:contact:',
+    integrationCache: 'legacy:integration:cache:'
   },
   
   // Default TTL values in seconds
   ttl: {
-    auth: 3600, // 1 hour
-    cache: 300, // 5 minutes
-    rateLimit: 60 // 1 minute
+    auth: 3600, // 1 hour for JWT tokens
+    cache: 300, // 5 minutes for cached data
+    rateLimit: 60, // 1 minute for rate limiting
+    rateLimitViolations: 86400 // 24 hours for tracking violations
+  },
+  
+  // Memory optimization settings
+  optimization: {
+    // Maximum memory usage in MB
+    maxmemory: '128mb',
+    
+    // Eviction policy: volatile-lru (remove least recently used keys with TTL)
+    maxmemoryPolicy: 'volatile-lru',
+    
+    // Only keep N samples when checking keys for eviction
+    maxmemorySamples: 5
   }
 };
 

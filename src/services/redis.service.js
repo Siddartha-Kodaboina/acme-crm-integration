@@ -4,10 +4,12 @@
  * 
  * This service implements:
  * 1. Connection management with error handling and reconnection
- * 2. Separate namespaces for AcmeCRM and integration service data
- * 3. Basic CRUD operations for both data types
+ * 2. Separate namespaces for authentication and rate limiting
+ * 3. Basic CRUD operations for ephemeral data
  * 4. TTL support for cached items
- * 5. Contact storage for both AcmeCRM and internal formats
+ * 5. JWT token management and rate limiting
+ * 
+ * Note: Contact storage has been moved to PostgreSQL
  */
 
 const Redis = require('ioredis');
@@ -279,67 +281,202 @@ class RedisService {
   }
   
   /**
-   * Store an AcmeCRM contact in Redis
-   * @param {string} id - AcmeCRM contact ID
-   * @param {Object} contact - AcmeCRM contact data
-   * @param {number} [ttl] - Time-to-live in seconds (optional)
-   * @returns {Promise<string>} "OK" if successful
+   * Store a JWT token in Redis
+   * @param {string} tokenId - JWT token ID (jti)
+   * @param {Object} tokenData - Token metadata
+   * @param {number} ttl - Time-to-live in seconds
+   * @returns {Promise<boolean>} True if successful
+   * 
+   * Example:
+   * Input: 
+   *   tokenId: "123e4567-e89b-12d3-a456-426614174000"
+   *   tokenData: {
+   *     userId: "1",
+   *     issuedAt: "1621234567",
+   *     expiresAt: "1621238167",
+   *     revoked: "false"
+   *   }
+   *   ttl: 3660
+   * Output: true
+   */
+  static async storeToken(tokenId, tokenData, ttl) {
+    const key = this.generateKey('acmeAuth', tokenId);
+    return this.hmset(key, tokenData, ttl);
+  }
+  
+  /**
+   * Get JWT token data from Redis
+   * @param {string} tokenId - JWT token ID (jti)
+   * @returns {Promise<Object|null>} Token data or null if not found
+   * 
+   * Example:
+   * Input: "123e4567-e89b-12d3-a456-426614174000"
+   * Output: {
+   *   userId: "1",
+   *   issuedAt: "1621234567",
+   *   expiresAt: "1621238167",
+   *   revoked: "false"
+   * }
+   */
+  static async getToken(tokenId) {
+    const key = this.generateKey('acmeAuth', tokenId);
+    return this.hgetall(key);
+  }
+  
+  /**
+   * Revoke a JWT token
+   * @param {string} tokenId - JWT token ID (jti)
+   * @param {Object} tokenData - Existing token data
+   * @returns {Promise<boolean>} True if successful
+   * 
+   * Example:
+   * Input: 
+   *   tokenId: "123e4567-e89b-12d3-a456-426614174000"
+   *   tokenData: {
+   *     userId: "1",
+   *     issuedAt: "1621234567",
+   *     expiresAt: "1621238167",
+   *     revoked: "false"
+   *   }
+   * Output: true
+   */
+  static async revokeToken(tokenId, tokenData) {
+    const key = this.generateKey('acmeAuth', tokenId);
+    return this.hmset(key, { ...tokenData, revoked: 'true' });
+  }
+  
+  /**
+   * Track rate limit for a key
+   * @param {string} key - Rate limit key
+   * @param {number} windowSec - Time window in seconds
+   * @returns {Promise<number>} Current count after increment
+   * 
+   * Example:
+   * Input: 
+   *   key: "ip:127.0.0.1"
+   *   windowSec: 60
+   * Output: 1
+   */
+  static async trackRateLimit(key, windowSec) {
+    const rateLimitKey = this.generateKey('rateLimit', key);
+    const count = await this.incr(rateLimitKey);
+    
+    // Set expiration only if this is the first request in the window
+    if (count === 1) {
+      const client = this.getClient();
+      await client.expire(rateLimitKey, windowSec);
+    }
+    
+    return count;
+  }
+  
+  /**
+   * Track rate limit violations
+   * @param {string} key - Rate limit key
+   * @param {number} ttl - Time-to-live in seconds
+   * @returns {Promise<number>} Current violation count after increment
+   * 
+   * Example:
+   * Input: 
+   *   key: "ip:127.0.0.1"
+   *   ttl: 3600
+   * Output: 1
+   */
+  static async trackRateLimitViolation(key, ttl) {
+    const violationsKey = this.generateKey('rateLimitViolations', key);
+    const count = await this.incr(violationsKey);
+    
+    // Set expiration only if this is the first violation
+    if (count === 1) {
+      const client = this.getClient();
+      await client.expire(violationsKey, ttl);
+    }
+    
+    return count;
+  }
+  
+  /**
+   * Get current rate limit count
+   * @param {string} key - Rate limit key
+   * @returns {Promise<number>} Current count
+   * 
+   * Example:
+   * Input: "ip:127.0.0.1"
+   * Output: 5
+   */
+  static async getRateLimitCount(key) {
+    const rateLimitKey = this.generateKey('rateLimit', key);
+    const count = await this.get(rateLimitKey, false);
+    return parseInt(count) || 0;
+  }
+  
+  /**
+   * Get current rate limit violation count
+   * @param {string} key - Rate limit key
+   * @returns {Promise<number>} Current violation count
+   * 
+   * Example:
+   * Input: "ip:127.0.0.1"
+   * Output: 2
+   */
+  static async getRateLimitViolationCount(key) {
+    const violationsKey = this.generateKey('rateLimitViolations', key);
+    const count = await this.get(violationsKey, false);
+    return parseInt(count) || 0;
+  }
+  
+  /**
+   * @deprecated Use PostgreSQL storage adapter instead
+   * Legacy method for backward compatibility
    */
   static async storeAcmeContact(id, contact, ttl) {
-    const key = this.generateKey('acmeContact', id);
-    return this.set(key, contact, ttl);
+    logger.warn(`Redis.storeAcmeContact is deprecated. Use PostgreSQL storage adapter instead. Called with ID: ${id}`);
+    return 'OK';
   }
   
   /**
-   * Retrieve an AcmeCRM contact from Redis
-   * @param {string} id - AcmeCRM contact ID
-   * @returns {Promise<Object|null>} AcmeCRM contact data or null if not found
+   * @deprecated Use PostgreSQL storage adapter instead
+   * Legacy method for backward compatibility
    */
   static async getAcmeContact(id) {
-    const key = this.generateKey('acmeContact', id);
-    return this.get(key);
+    logger.warn(`Redis.getAcmeContact is deprecated. Use PostgreSQL storage adapter instead. Called with ID: ${id}`);
+    return null;
   }
   
   /**
-   * Delete an AcmeCRM contact from Redis
-   * @param {string} id - AcmeCRM contact ID
-   * @returns {Promise<number>} 1 if contact was removed, 0 if contact did not exist
+   * @deprecated Use PostgreSQL storage adapter instead
+   * Legacy method for backward compatibility
    */
   static async deleteAcmeContact(id) {
-    const key = this.generateKey('acmeContact', id);
-    return this.del(key);
+    logger.warn(`Redis.deleteAcmeContact is deprecated. Use PostgreSQL storage adapter instead. Called with ID: ${id}`);
+    return 0;
   }
   
   /**
-   * Store an internal contact in Redis
-   * @param {string} id - Internal contact ID
-   * @param {Object} contact - Internal contact data
-   * @param {number} [ttl] - Time-to-live in seconds (optional)
-   * @returns {Promise<string>} "OK" if successful
+   * @deprecated Use PostgreSQL storage adapter instead
+   * Legacy method for backward compatibility
    */
   static async storeIntegrationContact(id, contact, ttl) {
-    const key = this.generateKey('integrationContact', id);
-    return this.set(key, contact, ttl);
+    logger.warn(`Redis.storeIntegrationContact is deprecated. Use PostgreSQL storage adapter instead. Called with ID: ${id}`);
+    return 'OK';
   }
   
   /**
-   * Retrieve an internal contact from Redis
-   * @param {string} id - Internal contact ID
-   * @returns {Promise<Object|null>} Internal contact data or null if not found
+   * @deprecated Use PostgreSQL storage adapter instead
+   * Legacy method for backward compatibility
    */
   static async getIntegrationContact(id) {
-    const key = this.generateKey('integrationContact', id);
-    return this.get(key);
+    logger.warn(`Redis.getIntegrationContact is deprecated. Use PostgreSQL storage adapter instead. Called with ID: ${id}`);
+    return null;
   }
   
   /**
-   * Delete an internal contact from Redis
-   * @param {string} id - Internal contact ID
-   * @returns {Promise<number>} 1 if contact was removed, 0 if contact did not exist
+   * @deprecated Use PostgreSQL storage adapter instead
+   * Legacy method for backward compatibility
    */
   static async deleteIntegrationContact(id) {
-    const key = this.generateKey('integrationContact', id);
-    return this.del(key);
+    logger.warn(`Redis.deleteIntegrationContact is deprecated. Use PostgreSQL storage adapter instead. Called with ID: ${id}`);
+    return 0;
   }
   
   /**
