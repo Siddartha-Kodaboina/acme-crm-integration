@@ -39,7 +39,7 @@ const config = {
   
   // Kafka configuration
   kafka: {
-    brokers: process.env.KAFKA_BROKERS || 'localhost:9092',
+    brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
     clientId: process.env.KAFKA_CLIENT_ID || 'acme-integration',
     ssl: process.env.KAFKA_SSL === 'true',
     sasl: process.env.KAFKA_SASL === 'true' ? {

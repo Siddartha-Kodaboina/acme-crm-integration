@@ -18,13 +18,25 @@ const logger = require('../utils/logger');
 // Test files to run in sequence
 const testFiles = [
   // Unit tests
+  'auth-with-redis.test.js',
+  'auth.test.js',
+  'postgres.service.test.js',
+  'redis-refactor.test.js',
   'contact-model-postgres.test.js',
   'contact-model-update-delete.test.js',
-  'redis-refactor.test.js',
-  'auth-with-redis.test.js',
+  
+  // API tests
+  'contact-api.test.js',
+  'contact-update-delete.test.js',
+  
+  // Webhook and Kafka tests
+  'webhook-receiver.test.js',
+  'webhook-simulator.test.js',
+  'kafka.test.js',
+  'kafka-consumer.test.js',
   
   // Integration tests
-  'contact-update-delete.test.js',
+  'integration.test.js',
   'system-integration.test.js',
   
   // Performance tests
@@ -48,46 +60,29 @@ const testResults = {
  * @param {string} testFile - Path to the test file
  * @returns {Promise<Object>} - Test result
  * 
- * Example:
- * Input: 'contact-model-postgres.test.js'
- * Output: {
- *   file: 'contact-model-postgres.test.js',
- *   success: true,
- *   duration: 1234, // ms
- *   output: '...'
- * }
  */
-function runTest(testFile) {
-  return new Promise((resolve) => {
-    const startTime = Date.now();
-    const testPath = path.join(__dirname, testFile);
-    
-    logger.info(`Running test: ${testFile}`);
-    
-    // Check if file exists
-    if (!fs.existsSync(testPath)) {
-      logger.warn(`Test file not found: ${testPath}`);
-      testResults.skipped++;
+async function runTest(testFile, timeoutMs = 30000) {
+  logger.info(`Running test: ${testFile}`);
+  const testPath = path.join(__dirname, testFile);
+  const startTime = Date.now();
+  
+  return new Promise((resolve, reject) => {
+    // Set a timeout to prevent tests from hanging indefinitely
+    const timeout = setTimeout(() => {
+      const errorMsg = `Test ${testFile} timed out after ${timeoutMs}ms`;
+      logger.error(errorMsg);
+      
+      testResults.failed++;
       testResults.results.push({
         file: testFile,
         success: false,
-        skipped: true,
-        duration: 0,
-        output: 'Test file not found'
+        duration: timeoutMs,
+        output: errorMsg
       });
       
-      resolve({
-        file: testFile,
-        success: false,
-        skipped: true,
-        duration: 0,
-        output: 'Test file not found'
-      });
-      
-      return;
-    }
+      resolve(); // Continue with next test instead of rejecting
+    }, timeoutMs);
     
-    // Run the test
     const testProcess = spawn('node', [testPath], {
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -107,6 +102,8 @@ function runTest(testFile) {
     });
     
     testProcess.on('close', (code) => {
+      clearTimeout(timeout); // Clear the timeout when the process completes
+      
       const duration = Date.now() - startTime;
       const success = code === 0;
       
@@ -134,6 +131,7 @@ function runTest(testFile) {
 
 /**
  * Run all tests in sequence
+ * Continues with other tests even if one test fails
  */
 async function runAllTests() {
   logger.info('Starting comprehensive test suite');
@@ -141,7 +139,18 @@ async function runAllTests() {
   const startTime = Date.now();
   
   for (const testFile of testFiles) {
-    await runTest(testFile);
+    try {
+      await runTest(testFile);
+    } catch (error) {
+      logger.error(`Error running test ${testFile}: ${error.message}`);
+      testResults.failed++;
+      testResults.results.push({
+        file: testFile,
+        success: false,
+        duration: 0,
+        output: `Test execution error: ${error.message}`
+      });
+    }
     
     // Add a small delay between tests to allow resources to be released
     await new Promise(resolve => setTimeout(resolve, 1000));

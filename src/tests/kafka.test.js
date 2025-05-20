@@ -9,6 +9,7 @@
 
 const KafkaService = require('../services/kafka.service');
 const RedisService = require('../services/redis.service');
+const PostgresService = require('../services/postgres.service');
 const contactEventsConsumer = require('../consumers/contact-events.consumer');
 const logger = require('../utils/logger');
 const kafkaConfig = require('../config/kafka.config');
@@ -47,17 +48,29 @@ async function testKafkaService() {
     
     await contactEventsConsumer.processContactCreatedEvent(event);
     
-    // Verify the contact was stored in Redis
-    logger.info('Verifying contact was stored in Redis');
-    const storedContact = await RedisService.getIntegrationContact(contactId);
-    logger.info('Retrieved integration contact', storedContact);
+    // Verify the contact was stored in PostgreSQL
+    logger.info('Verifying contact was stored in PostgreSQL');
+    const { rows } = await PostgresService.query(
+      'SELECT * FROM acme_contacts WHERE id = $1',
+      [contactId]
+    );
+    logger.info('Retrieved integration contact from PostgreSQL', rows[0]);
     
-    if (!storedContact) {
-      throw new Error('Contact was not stored in Redis');
+    if (!rows || rows.length === 0) {
+      throw new Error('Contact was not stored in PostgreSQL');
     }
     
-    if (storedContact.firstName !== contact.acme_first_name) {
+    const storedContact = rows[0];
+    if (storedContact.data.acme_first_name !== contact.acme_first_name) {
       throw new Error('Contact first name does not match');
+    }
+    
+    if (storedContact.data.acme_last_name !== contact.acme_last_name) {
+      throw new Error('Contact last name does not match');
+    }
+    
+    if (storedContact.data.acme_email !== contact.acme_email) {
+      throw new Error('Contact email does not match');
     }
     
     // Test contact updated event
@@ -91,13 +104,25 @@ async function testKafkaService() {
     
     await contactEventsConsumer.processContactUpdatedEvent(updateEvent);
     
-    // Verify the contact was updated in Redis
-    logger.info('Verifying contact was updated in Redis');
-    const updatedStoredContact = await RedisService.getIntegrationContact(contactId);
-    logger.info('Retrieved updated integration contact', updatedStoredContact);
+    // Verify the contact was updated in PostgreSQL
+    logger.info('Verifying contact was updated in PostgreSQL');
+    const { rows: updatedRows } = await PostgresService.query(
+      'SELECT * FROM acme_contacts WHERE id = $1',
+      [contactId]
+    );
+    logger.info('Retrieved updated integration contact from PostgreSQL', updatedRows[0]);
     
-    if (updatedStoredContact.lastName !== 'Smith') {
+    if (!updatedRows || updatedRows.length === 0) {
+      throw new Error('Updated contact not found in PostgreSQL');
+    }
+    
+    const updatedStoredContact = updatedRows[0];
+    if (updatedStoredContact.data.acme_last_name !== 'Smith') {
       throw new Error('Contact last name was not updated');
+    }
+    
+    if (updatedStoredContact.data.acme_email !== 'john.smith@example.com') {
+      throw new Error('Contact email was not updated');
     }
     
     // Test contact deleted event
@@ -117,13 +142,21 @@ async function testKafkaService() {
     
     await contactEventsConsumer.processContactDeletedEvent(deleteEvent);
     
-    // Verify the contact was deleted from Redis
-    logger.info('Verifying contact was deleted from Redis');
-    const deletedContact = await RedisService.getIntegrationContact(contactId);
-    logger.info('Retrieved deleted integration contact', deletedContact);
+    // Verify the contact was soft-deleted in PostgreSQL
+    logger.info('Verifying contact was soft-deleted in PostgreSQL');
+    const { rows: deletedRows } = await PostgresService.query(
+      'SELECT * FROM acme_contacts WHERE id = $1',
+      [contactId]
+    );
+    logger.info('Retrieved deleted integration contact from PostgreSQL', deletedRows);
     
-    if (deletedContact) {
-      throw new Error('Contact was not deleted from Redis');
+    if (!deletedRows || deletedRows.length === 0) {
+      throw new Error('Contact not found in PostgreSQL');
+    }
+    
+    const deletedContact = deletedRows[0];
+    if (!deletedContact.data.deleted) {
+      throw new Error('Contact was not marked as deleted in PostgreSQL');
     }
     
     logger.info('Kafka service test completed successfully');
@@ -131,6 +164,9 @@ async function testKafkaService() {
     // Close connections
     await KafkaService.close();
     await RedisService.close();
+    
+    // Exit with success code
+    process.exit(0);
   } catch (error) {
     logger.error('Kafka service test failed', error);
     

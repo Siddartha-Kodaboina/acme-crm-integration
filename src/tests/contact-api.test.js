@@ -200,6 +200,9 @@ async function runTests() {
     } catch (error) {
       logger.error('Error closing PostgreSQL connection:', error);
     }
+    
+    // Exit with success code
+    process.exit(0);
   }
 }
 

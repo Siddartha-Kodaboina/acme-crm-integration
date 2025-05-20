@@ -246,6 +246,37 @@ class PostgresAdapter extends StorageAdapter {
    * Close the PostgreSQL connection
    * @returns {Promise<void>}
    */
+  /**
+   * Get internal contacts with pagination and filtering
+   * @param {Object} options - Query options
+   * @param {number} options.page - Page number (1-based)
+   * @param {number} options.limit - Number of items per page
+   * @param {string} options.sort - Field to sort by
+   * @param {string} options.order - Sort order ('asc' or 'desc')
+   * @param {string} options.search - Search term for name, email, or company
+   * @param {string} options.source - Filter by source system
+   * @param {string} options.status - Filter by status
+   * @returns {Promise<Object>} Paginated contacts and total count
+   * 
+   * Example:
+   * Input: { page: 1, limit: 10, sort: 'lastName', order: 'asc' }
+   * Output: {
+   *   contacts: [ ... array of contacts ... ],
+   *   total: 42
+   * }
+   */
+  async getInternalContacts(options = {}) {
+    try {
+      return await PostgresService.getInternalContacts(options);
+    } catch (error) {
+      logger.error('PostgresAdapter: Error retrieving internal contacts', error);
+      throw new AppError('Failed to retrieve internal contacts', errorTypes.DATABASE_ERROR, {
+        code: errorCodes.DATABASE_ERROR,
+        details: error.message
+      });
+    }
+  }
+  
   async close() {
     try {
       await PostgresService.close();

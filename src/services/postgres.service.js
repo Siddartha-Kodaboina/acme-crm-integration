@@ -674,6 +674,175 @@ class PostgresService {
   }
   
   /**
+   * Get internal contacts with pagination and filtering
+   * @param {Object} options - Query options
+   * @param {number} options.page - Page number (1-based)
+   * @param {number} options.limit - Number of items per page
+   * @param {string} options.sort - Field to sort by
+   * @param {string} options.order - Sort order ('asc' or 'desc')
+   * @param {string} options.search - Search term for name, email, or company
+   * @param {string} options.source - Filter by source system
+   * @param {string} options.status - Filter by status
+   * @returns {Promise<Object>} Paginated contacts and total count
+   * 
+   * Example usage:
+   * const result = await PostgresService.getInternalContacts({
+   *   page: 1,
+   *   limit: 10,
+   *   sort: 'lastName',
+   *   order: 'asc',
+   *   search: 'john',
+   *   source: 'acmecrm',
+   *   status: 'active'
+   * });
+   * 
+   * Input:
+   * options: {
+   *   page: 1,
+   *   limit: 10,
+   *   sort: 'lastName',
+   *   order: 'asc',
+   *   search: 'john',
+   *   source: 'acmecrm',
+   *   status: 'active'
+   * }
+   * 
+   * Output:
+   * {
+   *   contacts: [
+   *     {
+   *       id: '123e4567-e89b-12d3-a456-426614174000',
+   *       firstName: 'John',
+   *       lastName: 'Doe',
+   *       email: 'john.doe@example.com',
+   *       ...
+   *     },
+   *     // More contacts...
+   *   ],
+   *   total: 42
+   * }
+   */
+  static async getInternalContacts(options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        sort = 'createdAt',
+        order = 'desc',
+        search = '',
+        source = '',
+        status = ''
+      } = options;
+      
+      // Calculate offset for pagination
+      const offset = (page - 1) * limit;
+      
+      // Build the WHERE clause for filtering
+      const whereConditions = [];
+      const queryParams = [];
+      let paramIndex = 1;
+      
+      // Add search filter if provided
+      if (search) {
+        whereConditions.push(`(
+          first_name ILIKE $${paramIndex} OR
+          last_name ILIKE $${paramIndex} OR
+          email ILIKE $${paramIndex} OR
+          company ILIKE $${paramIndex}
+        )`);
+        queryParams.push(`%${search}%`);
+        paramIndex++;
+      }
+      
+      // Add source filter if provided
+      if (source) {
+        whereConditions.push(`source = $${paramIndex}`);
+        queryParams.push(source);
+        paramIndex++;
+      }
+      
+      // Add status filter if provided
+      if (status) {
+        whereConditions.push(`status = $${paramIndex}`);
+        queryParams.push(status);
+        paramIndex++;
+      }
+      
+      // Build the WHERE clause
+      const whereClause = whereConditions.length > 0
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+      
+      // Map sort field from camelCase to snake_case
+      const sortFieldMap = {
+        firstName: 'first_name',
+        lastName: 'last_name',
+        email: 'email',
+        company: 'company',
+        createdAt: 'created_at',
+        updatedAt: 'updated_at'
+      };
+      
+      const sortField = sortFieldMap[sort] || 'created_at';
+      const sortOrder = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+      
+      // Get total count for pagination
+      const countQuery = `
+        SELECT COUNT(*) as total
+        FROM internal_contacts
+        ${whereClause}
+      `;
+      
+      const countResult = await this.query(countQuery, queryParams);
+      const total = parseInt(countResult.rows[0].total, 10);
+      
+      // Get contacts for current page
+      const dataQuery = `
+        SELECT *
+        FROM internal_contacts
+        ${whereClause}
+        ORDER BY ${sortField} ${sortOrder}
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
+      
+      const dataParams = [...queryParams, limit, offset];
+      const dataResult = await this.query(dataQuery, dataParams);
+      
+      // Convert rows from snake_case to camelCase
+      const contacts = dataResult.rows.map(row => ({
+        id: row.id,
+        firstName: row.first_name,
+        lastName: row.last_name,
+        email: row.email,
+        phone: row.phone,
+        company: row.company,
+        title: row.title,
+        address: row.address,
+        notes: row.notes,
+        status: row.status,
+        tags: row.tags,
+        customFields: row.custom_fields,
+        source: row.source,
+        sourceId: row.source_id,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString(),
+        version: row.version
+      }));
+      
+      return {
+        contacts,
+        total
+      };
+    } catch (error) {
+      logger.error('Error retrieving internal contacts', error);
+      throw new AppError('Failed to retrieve internal contacts', errorTypes.DATABASE_ERROR, {
+        code: errorCodes.DATABASE_ERROR,
+        details: error.message
+      });
+    }
+  }
+  
+  /**
    * Close the PostgreSQL connection pool
    * @returns {Promise<void>}
    * 

@@ -1,49 +1,109 @@
 {
-  "timestamp": "2025-05-18T23:39:01.951Z",
-  "duration": 7481,
+  "timestamp": "2025-05-20T02:16:06.907Z",
+  "duration": 35108,
   "summary": {
-    "total": 6,
-    "passed": 6,
+    "total": 16,
+    "passed": 16,
     "failed": 0,
     "skipped": 0,
     "successRate": "100.00%"
   },
   "results": [
     {
-      "file": "contact-model-postgres.test.js",
+      "file": "auth-with-redis.test.js",
       "success": true,
       "skipped": false,
-      "duration": 193
+      "duration": 284
+    },
+    {
+      "file": "auth.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 252
+    },
+    {
+      "file": "postgres.service.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 200
     },
     {
       "file": "redis-refactor.test.js",
       "success": true,
       "skipped": false,
-      "duration": 227
+      "duration": 160
     },
     {
-      "file": "auth-with-redis.test.js",
+      "file": "contact-model-postgres.test.js",
       "success": true,
       "skipped": false,
-      "duration": 165
+      "duration": 336
+    },
+    {
+      "file": "contact-model-update-delete.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 321
+    },
+    {
+      "file": "contact-api.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 525
+    },
+    {
+      "file": "contact-update-delete.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 388
+    },
+    {
+      "file": "webhook-receiver.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 294
+    },
+    {
+      "file": "webhook-simulator.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 5369
+    },
+    {
+      "file": "kafka.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 501
+    },
+    {
+      "file": "kafka-consumer.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 8814
+    },
+    {
+      "file": "integration.test.js",
+      "success": true,
+      "skipped": false,
+      "duration": 292
     },
     {
       "file": "system-integration.test.js",
       "success": true,
       "skipped": false,
-      "duration": 241
+      "duration": 249
     },
     {
       "file": "performance/contact-performance.test.js",
       "success": true,
       "skipped": false,
-      "duration": 489
+      "duration": 939
     },
     {
       "file": "error-handling.test.js",
       "success": true,
       "skipped": false,
-      "duration": 158
+      "duration": 156
     }
   ]
 }

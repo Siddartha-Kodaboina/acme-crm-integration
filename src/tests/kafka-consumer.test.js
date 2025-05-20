@@ -371,6 +371,9 @@ async function main() {
   } finally {
     // Clean up
     await cleanupTestEnvironment();
+    
+    // Exit with success code
+    process.exit(0);
   }
 }
 

@@ -411,15 +411,8 @@ const contactController = {
       
       // Return success response
       res.status(200).json({
-        data: result.contacts,
-        pagination: {
-          page,
-          limit,
-          totalItems: result.totalItems,
-          totalPages: Math.ceil(result.totalItems / limit),
-          hasNextPage: page < Math.ceil(result.totalItems / limit),
-          hasPrevPage: page > 1
-        }
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);
@@ -467,7 +460,7 @@ const contactController = {
       const { id } = req.params;
       
       // Validate request body
-      const { error, value } = contactSchemas.updateContact.validate(req.body);
+      const { error, value } = contactSchemas.updateContactSchema.validate(req.body);
       if (error) {
         throw new AppError('Invalid contact data', errorTypes.VALIDATION_ERROR, {
           code: errorCodes.INVALID_INPUT,
@@ -559,7 +552,7 @@ const contactController = {
       const { id } = req.params;
       
       // Validate request body
-      const { error, value } = contactSchemas.patchContact.validate(req.body);
+      const { error, value } = contactSchemas.patchContactSchema.validate(req.body);
       if (error) {
         throw new AppError('Invalid contact data', errorTypes.VALIDATION_ERROR, {
           code: errorCodes.INVALID_INPUT,
@@ -593,7 +586,7 @@ const contactController = {
         const originalContact = { ...existingContact };
         
         // Update the contact
-        const contact = await ContactModel.patchContact(id, req.body);
+        const contact = await ContactModel.updateContact(id, req.body);
         
         // Trigger internal webhook event
         WebhookService.contactUpdated(contact)

@@ -399,10 +399,83 @@ class ContactModel {
    */
   static async saveContact(contact) {
     try {
+      // Use the storage adapter to save the contact
       const storageAdapter = this._getStorageAdapter();
       await storageAdapter.storeInternalContact(contact.id, contact);
     } catch (error) {
       throw new AppError(`Failed to save contact with ID ${contact.id}`, errorTypes.INTERNAL_ERROR, {
+        code: errorCodes.DATABASE_ERROR,
+        details: error.message
+      });
+    }
+  }
+  
+  /**
+   * Get contacts with pagination and filtering
+   * @param {Object} options - Query options
+   * @param {number} options.page - Page number (1-based)
+   * @param {number} options.limit - Number of items per page
+   * @param {string} options.sort - Field to sort by
+   * @param {string} options.order - Sort order ('asc' or 'desc')
+   * @param {string} options.search - Search term for name, email, or company
+   * @param {string} options.source - Filter by source system
+   * @param {string} options.status - Filter by status
+   * @returns {Promise<Object>} Paginated contacts and metadata
+   * 
+   * Example:
+   * Input: { page: 1, limit: 10, sort: 'lastName', order: 'asc' }
+   * Output: {
+   *   data: [ ... array of contacts ... ],
+   *   pagination: {
+   *     page: 1,
+   *     limit: 10,
+   *     totalItems: 42,
+   *     totalPages: 5,
+   *     hasNextPage: true,
+   *     hasPrevPage: false
+   *   }
+   * }
+   */
+  static async getContacts(options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        sort = 'createdAt',
+        order = 'desc',
+        search = '',
+        source = '',
+        status = ''
+      } = options;
+      
+      // Use the storage adapter to get contacts with pagination
+      const storageAdapter = this._getStorageAdapter();
+      const result = await storageAdapter.getInternalContacts({
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        sort,
+        order,
+        search,
+        source,
+        status
+      });
+      
+      // Calculate pagination metadata
+      const totalPages = Math.ceil(result.total / limit);
+      
+      return {
+        data: result.contacts,
+        pagination: {
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
+          totalItems: result.total,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    } catch (error) {
+      throw new AppError('Failed to get contacts', errorTypes.INTERNAL_ERROR, {
         code: errorCodes.DATABASE_ERROR,
         details: error.message
       });

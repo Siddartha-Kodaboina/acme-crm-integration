@@ -239,6 +239,45 @@ const contactSchemas = {
       .description('Filter by source system'),
     status: Joi.string().valid('active', 'inactive', 'pending').allow('', null)
       .description('Filter by status')
+  }),
+  
+  /**
+   * Alias for createAcmeContactSchema to maintain compatibility with controller
+   */
+  acmeContact: Joi.object({
+    id: Joi.string().required()
+      .description('AcmeCRM contact ID'),
+    acme_first_name: Joi.string().min(1).max(100).required()
+      .description('First name of the contact in AcmeCRM'),
+    acme_last_name: Joi.string().min(1).max(100).required()
+      .description('Last name of the contact in AcmeCRM'),
+    acme_email: Joi.string().email().required()
+      .description('Email address of the contact in AcmeCRM'),
+    acme_phone: Joi.string().max(50).allow(null, '')
+      .description('Phone number of the contact in AcmeCRM'),
+    acme_company: Joi.string().max(200).allow(null, '')
+      .description('Company name of the contact in AcmeCRM'),
+    acme_title: Joi.string().max(200).allow(null, '')
+      .description('Job title of the contact in AcmeCRM'),
+    acme_address: Joi.object({
+      street: Joi.string().max(200).allow(null, ''),
+      city: Joi.string().max(100).allow(null, ''),
+      state: Joi.string().max(100).allow(null, ''),
+      postal_code: Joi.string().max(20).allow(null, ''),
+      country: Joi.string().max(100).allow(null, '')
+    }).allow(null)
+      .description('Address of the contact in AcmeCRM'),
+    acme_notes: Joi.string().allow(null, '')
+      .description('Notes about the contact in AcmeCRM'),
+    acme_status: Joi.string().allow(null, '')
+      .description('Status of the contact in AcmeCRM'),
+    acme_tags: Joi.array().items(Joi.string()).default([])
+      .description('Tags associated with the contact in AcmeCRM'),
+    acme_custom_fields: Joi.object().pattern(
+      Joi.string(), 
+      Joi.alternatives().try(Joi.string(), Joi.number(), Joi.boolean(), Joi.array())
+    ).default({})
+      .description('Custom fields for the contact in AcmeCRM')
   })
 };
 
